@@ -18,7 +18,7 @@ class Command(BaseCommand):
         sheet = workbook.active
         for row in sheet.iter_rows(min_row=2, values_only=True):
             ReporteMedico.objects.update_or_create(
-                id=row[0],
-                defaults={"diagnosis": row[1], "texture": row[2], "perimeter": row[3]},
+                Id=row[0],
+                defaults={"Diagnosis": row[1], "Texture": row[2], "Perimeter": row[3]},
             )
         self.stdout.write(self.style.SUCCESS("Successfully uploaded XLSX data."))
