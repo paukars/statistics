@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% load custom_filters %}
+
+{% block title %}Histograma del Perímetro{% endblock %}
+
+{% block content %}
+    <h2>Histograma del Perímetro para Diagnósticos Malignos y Benignos</h2>
+    <img src="data:image/png;base64,{{ image_data|b64encode }}" alt="Histograma">
+    <h3>Estadísticas para Diagnósticos Malignos</h3>
+    <p>Media del perímetro (Malignos): {{ mean_perimeter_malignant }}</p>
+    <p>Desviación estándar del perímetro (Malignos): {{ std_perimeter_malignant }}</p>
+    <h3>Estadísticas para Diagnósticos Benignos</h3>
+    <p>Media del perímetro (Benignos): {{ mean_perimeter_benign }}</p>
+    <p>Desviación estándar del perímetro (Benignos): {{ std_perimeter_benign }}</p>
+{% endblock %}
+

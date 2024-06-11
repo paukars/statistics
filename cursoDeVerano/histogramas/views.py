@@ -1,5 +1,5 @@
 import io
-
+import numpy as np
 import matplotlib.pyplot as plt
 from django.http import HttpResponse
 from django.shortcuts import render
@@ -72,10 +72,11 @@ def histogramas_combinados(request):
     malignant_perimeters = [record.Perimeter for record in malignant_records]
     benign_perimeters = [record.Perimeter for record in benign_records]
 
-    all_perimeters = malignant_perimeters + benign_perimeters
-    labels = ["Malignos"] * len(malignant_perimeters) + ["Benignos"] * len(
-        benign_perimeters
-    )
+    # Calculate mean and standard deviation for each diagnosis
+    mean_perimeter_malignant = np.mean(malignant_perimeters)
+    std_perimeter_malignant = np.std(malignant_perimeters)
+    mean_perimeter_benign = np.mean(benign_perimeters)
+    std_perimeter_benign = np.std(benign_perimeters)
 
     # Create the histogram plot
     plt.figure(figsize=(12, 9))
@@ -106,10 +107,15 @@ def histogramas_combinados(request):
     buf = io.BytesIO()
     plt.savefig(buf, format="png")
     plt.close()
-
-    # Return the response with the image
-    response = HttpResponse(buf.getvalue(), content_type="image/png")
-    response["Content-Length"] = buf.tell()
-
     buf.seek(0)
-    return response
+    image_data = buf.getvalue()
+
+    context = {
+        "image_data": image_data,
+        "mean_perimeter_malignant" : mean_perimeter_malignant,
+        "std_perimeter_malignant": std_perimeter_malignant,
+        "mean_perimeter_benign": mean_perimeter_benign,
+        "std_perimeter_benign": std_perimeter_benign,
+    }
+
+    return render(request, "histogramas_combinados.html", context)
