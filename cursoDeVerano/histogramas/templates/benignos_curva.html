@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% load custom_filters %}
+
+{% block title %}Histograma del Perímetro para Diagnósticos Benignos{% endblock %}
+
+{% block content %}
+    <h2>Histograma del Perímetro para Diagnósticos Benignos</h2>
+    <img src="data:image/png;base64,{{ histogram_image_data|b64encode }}" alt="Histograma">
+    
+    <h3>Estadísticas para Diagnósticos Benignos</h3>
+    <p>Media del perímetro: {{ mean_perimeter }}</p>
+    <p>Desviación estándar del perímetro: {{ std_perimeter }}</p>
+    <p>Mejor ajuste de distribución: {{ best_fit_distribution }}</p>
+    
+    <h3>Grafico Q-Q</h3>
+    <img src="data:image/png;base64,{{ qq_image_data|b64encode }}" alt="Q-Q Plot">
+{% endblock %}
+
