@@ -4,6 +4,7 @@ import io
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+from django.views import View
 from django.http import HttpResponse
 from django.shortcuts import render
 from scipy import stats
@@ -13,60 +14,61 @@ from .models import ReporteMedico
 # Create your views here.
 
 
-def histograma_de_malignos(request):
-    records = ReporteMedico.objects.filter(Diagnosis="M")
+class HistogramBaseView(View):
+    diagnosis_type = None
+    color = None
+    bins = None
 
-    perimeters = [record.Perimeter for record in records]
+    def get_queryset(self):
+        return ReporteMedico.objects.filter(Diagnosis=self.diagnosis_type)
 
-    plt.figure(figsize=(10, 9))
-    # plt.hist(perimeters, bins=bins, color="blue", edgecolor="black", density=True)
-    counts, bins, patches = plt.hist(
-        perimeters, bins=30, density=True, color="red", edgecolor="black"
-    )
-    plt.title("Histograma del perimetro para diagnosticos malignos")
-    plt.xlabel("Perimetro")
-    plt.ylabel("Frecuencia")
-    plt.grid(True, which="both", axis="x", color="gray", linestyle="-", linewidth=0.5)
-    plt.grid(True, which="both", axis="y", color="gray", linestyle="-", linewidth=0.5)
-    plt.xticks(bins, rotation="vertical")
+    def get_histogram_data(self):
+        records = self.get_queryset()
+        perimeters = [record.Perimeter for record in records]
+        return perimeters
 
-    buf = io.BytesIO()
-    plt.savefig(buf, format="png")
-    plt.close()
+    def generate_histogram(self, perimeters):
+        plt.figure(figsize=(10, 9))
+        counts, bins, patches = plt.hist(
+            perimeters, bins=self.bins, density=True, color=self.color, edgecolor="black"
+        )
+        plt.title(f"Histograma del perimetro para diagnosticos {self.diagnosis_type}")
+        plt.xlabel("Perimetro")
+        plt.ylabel("Frecuencia")
+        plt.grid(True, which="both", axis="x", color="gray", linestyle="-", linewidth=0.5)
+        plt.grid(True, which="both", axis="y", color="gray", linestyle="-", linewidth=0.5)
+        plt.xticks(bins, rotation="vertical")
 
-    response = HttpResponse(buf.getvalue(), content_type="image/png")
-    response["Content-Length"] = buf.tell()
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png")
+        plt.close()
+        buf.seek(0)
 
-    buf.seek(0)
-    return response
+        image_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        return image_base64
 
+class CombinedHistogramView(HistogramBaseView):
+    def get(self, request, *args, **kwargs):
+        # Generate histogram for malignant diagnoses
+        self.diagnosis_type = "M"
+        self.color = "red"
+        self.bins = 30
+        malignant_data = self.get_histogram_data()
+        malignant_image = self.generate_histogram(malignant_data)
 
-def histograma_de_benignos(request):
-    records = ReporteMedico.objects.filter(Diagnosis="B")
+        # Generate histogram for benign diagnoses
+        self.diagnosis_type = "B"
+        self.color = "green"
+        self.bins = 40
+        benign_data = self.get_histogram_data()
+        benign_image = self.generate_histogram(benign_data)
 
-    perimeters = [record.Perimeter for record in records]
-
-    plt.figure(figsize=(10, 9))
-    # plt.hist(perimeters, bins=bins, color="blue", edgecolor="black", density=True)
-    counts, bins, patches = plt.hist(
-        perimeters, bins=40, density=True, color="green", edgecolor="black"
-    )
-    plt.title("Histograma del perimetro para diagnosticos malignos")
-    plt.xlabel("Perimetro")
-    plt.ylabel("Frecuencia")
-    plt.grid(True, which="both", axis="x", color="gray", linestyle="-", linewidth=0.5)
-    plt.grid(True, which="both", axis="y", color="gray", linestyle="-", linewidth=0.5)
-    plt.xticks(bins, rotation="vertical")
-
-    buf = io.BytesIO()
-    plt.savefig(buf, format="png")
-    plt.close()
-
-    response = HttpResponse(buf.getvalue(), content_type="image/png")
-    response["Content-Length"] = buf.tell()
-
-    buf.seek(0)
-    return response
+        # Render the template with both images
+        context = {
+            'malignant_image': malignant_image,
+            'benign_image': benign_image,
+        }
+        return render(request, 'combined_histograms.html', context)
 
 
 def histogramas_combinados(request):
