@@ -7,7 +7,8 @@ import seaborn as sns
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.views import View
-from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm
+from mpl_toolkits.mplot3d.axes3d import Axes3D
 from scipy.stats import norm
 
 from .models import ReporteMedico
@@ -74,9 +75,58 @@ class HistogramBaseView(View):
         image_base64 = base64.b64encode(buf.getvalue()).decode("utf-8")
         return image_base64
 
+    def generate_3d_histogram(self, perimeter_values, texture_values, bins=20, x_range=None, y_range=None):
+        x = np.array(perimeter_values)
+        y = np.array(texture_values)
+
+        # Set default ranges if none provided
+        if x_range is None:
+            x_range = [x.min(), x.max()]
+        if y_range is None:
+            y_range = [y.min(), y.max()]
+
+        fig = plt.figure()
+        ax = fig.add_subplot(projection="3d")
+
+        hist, xedges, yedges = np.histogram2d(x, y, bins=bins, range=[x_range, y_range])
+
+        # Create the 3D histogram
+        hist, xedges, yedges = np.histogram2d(x, y, bins=(20, 20))
+        xpos, ypos = np.meshgrid(xedges[:-1] + xedges[1:], yedges[:-1] + yedges[1:])
+        xpos = xpos.flatten() / 2
+        ypos = ypos.flatten() / 2
+        zpos = np.zeros_like(xpos)
+
+        dx = xedges[1] - xedges[0]
+        dy = yedges[1] - yedges[0]
+        dz = hist.flatten()
+
+        # Get desired colormap
+        cmap = plt.get_cmap("jet")
+        max_height = np.max(dz)  # get range of colorbars so we can normalize
+        min_height = np.min(dz)
+        rgba = [
+            cmap((k - min_height) / max_height) for k in dz
+        ]  # scale each z to [0,1], and get their rgb values
+
+        # Plot the bars
+        ax.bar3d(xpos, ypos, zpos, dx, dy, dz, color=rgba, zsort="average")
+
+        ax.set_title("3D Plot of Perimetro and Textura")
+        ax.set_xlabel("Perimetro")
+        ax.set_ylabel("Textura")
+
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png")
+        plt.close()
+        buf.seek(0)
+
+        image_base64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+        return image_base64
+
 
 class CombinedHistogramView(HistogramBaseView):
-    def get(self, request, bins=20, *args, **kwargs):
+    def get(self, request, bins=20):
         bins = int(bins)
 
         histograms = []
@@ -101,8 +151,16 @@ class CombinedHistogramView(HistogramBaseView):
                 }
             )
 
+        # Generate 3D histogram for Perimetro and Textura
+        perimeter_values = self.get_histogram_data("Perimetro")
+        texture_values = self.get_histogram_data("Textura")
+        plot_3d_histogram = self.generate_3d_histogram(
+            perimeter_values, texture_values, bins
+        )
+
         context = {
             "histograms": histograms,
+            "plot_3d_histogram": plot_3d_histogram,
         }
 
         return render(request, "combined_histograms.html", context)
