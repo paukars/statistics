@@ -5,8 +5,8 @@ from django.db import models
 class ReporteMedico(models.Model):
     Id = models.IntegerField(primary_key=True)
     Diagnosis = models.CharField(max_length=1)
-    Texture = models.FloatField()
-    Perimeter = models.FloatField()
+    Textura = models.FloatField()
+    Perimetro = models.FloatField()
 
 
 

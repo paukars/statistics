@@ -1,29 +1,21 @@
 {% extends "base.html" %}
 
-{% block title %}
-Combined Histograms
-{% endblock %}
+
 
 {% block content %}
-<div class="container mt-5 carousel-container">
+<div class="container mt-5 carousel-container" data-bs-theme="dark">
   <div id="histogramCarousel" class="carousel slide" data-bs-ride="carousel">
     <div class="carousel-indicators">
-      <button type="button" data-bs-target="#histogramCarousel" data-bs-slide-to="0" class="active" aria-current="true" aria-label="Slide 1"></button>
-      <button type="button" data-bs-target="#histogramCarousel" data-bs-slide-to="1" aria-label="Slide 2"></button>
+      {% for histogram in histograms %}
+      <button type="button" data-bs-target="#histogramCarousel" data-bs-slide-to="{{ forloop.counter0 }}" class="{% if forloop.first %}active{% endif %}" aria-current="true" aria-label="Slide {{ forloop.counter }}"></button>
+      {% endfor %}
     </div>
     <div class="carousel-inner">
-      <div class="carousel-item active">
-        <img src="data:image/png;base64,{{ malignant_image }}" class="d-block w-100 custom-img-size" alt="Malignant Perimeter Histogram">
-        <div class="carousel-caption d-none d-md-block">
-          <h5>Histograma del perímetro para diagnósticos malignos</h5>
-        </div>
+      {% for histogram in histograms %}
+      <div class="carousel-item {% if forloop.first %}active{% endif %}">
+        <img src="data:image/png;base64,{{ histogram.image }}" class="d-block w-100 custom-img-size" alt="Histogram of {{ histogram.attribute }} for {{ histogram.diagnosis }}">
       </div>
-      <div class="carousel-item">
-        <img src="data:image/png;base64,{{ benign_image }}" class="d-block w-100 custom-img-size" alt="Benign Perimeter Histogram">
-        <div class="carousel-caption d-none d-md-block">
-          <h5>Histograma del perímetro para diagnósticos benignos</h5>
-        </div>
-      </div>
+      {% endfor %}
     </div>
     <button class="carousel-control-prev" type="button" data-bs-target="#histogramCarousel" data-bs-slide="prev">
       <span class="carousel-control-prev-icon" aria-hidden="true"></span>
