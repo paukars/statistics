@@ -170,8 +170,8 @@ def histogramas_combinados(request):
     malignant_records = ReporteMedico.objects.filter(Diagnosis="M")
     benign_records = ReporteMedico.objects.filter(Diagnosis="B")
 
-    malignant_perimeters = [record.Perimeter for record in malignant_records]
-    benign_perimeters = [record.Perimeter for record in benign_records]
+    malignant_perimeters = [record.Perimetro for record in malignant_records]
+    benign_perimeters = [record.Perimetro for record in benign_records]
 
     # Calculate mean and standard deviation for each diagnosis
     mean_perimeter_malignant = np.mean(malignant_perimeters)
