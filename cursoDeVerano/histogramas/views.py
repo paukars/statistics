@@ -7,6 +7,7 @@ import seaborn as sns
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.views import View
+from mpl_toolkits.mplot3d import Axes3D
 from scipy.stats import norm
 
 from .models import ReporteMedico
@@ -29,12 +30,12 @@ class HistogramBaseView(View):
         values = [getattr(record, attribute) for record in records]
         return values
 
-    def generate_histogram(self, values, diagnosis, attribute):
+    def generate_histogram(self, values, diagnosis, attribute, bins):
         plt.figure(figsize=(10, 9))
 
         counts, bins, patches = plt.hist(
             values,
-            bins=self.bins,
+            bins=bins,
             density=True,
             color=self.color,
             edgecolor="black",
@@ -48,7 +49,7 @@ class HistogramBaseView(View):
         plt.plot(x, p, "k", linewidth=1.5)
 
         diagnosis_title = "malignos" if diagnosis == "M" else "benignos"
-        plt.title(f"Histograma del {attribute} para diagnosticos {diagnosis_title}")
+        plt.title(f"Histograma de {attribute} para diagnosticos {diagnosis_title}")
         plt.xlabel(attribute.capitalize())
         plt.ylabel("Frecuencia")
         plt.grid(
@@ -65,7 +66,6 @@ class HistogramBaseView(View):
             0.75, 0.75, textstr, fontsize=12, bbox=dict(facecolor="white", alpha=0.5)
         )
 
-
         buf = io.BytesIO()
         plt.savefig(buf, format="png")
         plt.close()
@@ -76,21 +76,23 @@ class HistogramBaseView(View):
 
 
 class CombinedHistogramView(HistogramBaseView):
-    def get(self, request, *args, **kwargs):
+    def get(self, request, bins=20, *args, **kwargs):
+        bins = int(bins)
+
         histograms = []
+
         attributes = [
-            ("Perimetro", 30, "M", "red"),
-            ("Perimetro", 40, "B", "green"),
-            ("Textura", 30, "M", "blue"),
-            ("Textura", 40, "B", "orange"),
+            ("Perimetro", "M", "red"),
+            ("Perimetro", "B", "green"),
+            ("Textura", "M", "blue"),
+            ("Textura", "B", "orange"),
         ]
-        for attribute, bins, diagnosis, color in attributes:
+        for attribute, diagnosis, color in attributes:
             self.attribute = attribute
-            self.bins = bins
             self.diagnosis_type = diagnosis
             self.color = color
             data = self.get_histogram_data(attribute)
-            image = self.generate_histogram(data, diagnosis, attribute)
+            image = self.generate_histogram(data, diagnosis, attribute, bins)
             histograms.append(
                 {
                     "attribute": attribute,
@@ -102,6 +104,7 @@ class CombinedHistogramView(HistogramBaseView):
         context = {
             "histograms": histograms,
         }
+
         return render(request, "combined_histograms.html", context)
 
 
