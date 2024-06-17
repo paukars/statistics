@@ -76,7 +76,13 @@ class HistogramBaseView(View):
         return image_base64
 
     def generate_3d_histogram(
-        self, perimeter_values, texture_values, bins=10, x_range=None, y_range=None
+        self,
+        perimeter_values,
+        texture_values,
+        title,
+        bins=10,
+        x_range=None,
+        y_range=None,
     ):
         x = np.array(perimeter_values)
         y = np.array(texture_values)
@@ -87,14 +93,14 @@ class HistogramBaseView(View):
         if y_range is None:
             y_range = [y.min(), y.max()]
 
-        fig = plt.figure()
+        fig = plt.figure(figsize=(12, 10))
         ax = fig.add_subplot(projection="3d")
 
         # hist, xedges, yedges = np.histogram2d(x, y, bins=bins, range=[x_range, y_range])
 
         # Create the 3D histogram
         hist, xedges, yedges = np.histogram2d(
-            x, y, bins=(bins, bins), range=[x_range, y_range]
+            x, y, bins=(bins, bins), range=[x_range, y_range], density=True
         )
         xpos, ypos = np.meshgrid(
             xedges[:-1] + (xedges[1] - xedges[0]) / 2,
@@ -120,27 +126,24 @@ class HistogramBaseView(View):
         # Plot the bars
         ax.bar3d(xpos, ypos, zpos, dx, dy, dz, color=rgba, zsort="average")
 
-        # Fit a bivariate normal distribution to the data
-        mu = [np.mean(x), np.mean(y)]
-        sigma = np.cov(x, y)
-        rv = multivariate_normal(mu, sigma)
+        # Plot bivariate Gaussian distribution
+        mean = [np.mean(x), np.mean(y)]
+        cov = np.cov(x, y)
 
-        # Create a grid for plotting the normal distribution
-        x_grid = np.linspace(x_range[0], x_range[1], 100)
-        y_grid = np.linspace(y_range[0], y_range[1], 100)
-        X, Y = np.meshgrid(x_grid, y_grid)
-        pos = np.dstack((X, Y))
-        Z = rv.pdf(pos)
+        x_mesh, y_mesh = np.meshgrid(
+            np.linspace(x_range[0], x_range[1], 100),
+            np.linspace(y_range[0], y_range[1], 100),
+        )
+        pos = np.dstack((x_mesh, y_mesh))
+        rv = multivariate_normal(mean, cov)
+        z_mesh = rv.pdf(pos)
 
-        # Plot the normal distribution surface
+        # ax.plot_wireframe(x_mesh, y_mesh, z_mesh, color="green")
+        ax.plot_surface(x_mesh, y_mesh, z_mesh, cmap="viridis", alpha=0.6)
 
-        # Plot the normal distribution surface
-        ax.plot_surface(X, Y, Z, cmap="viridis", alpha=1)
-
-        ax.set_title("3D Plot of Perimetro and Textura")
+        ax.set_title(f"Grafico en 3D para perimetro y textura - {title}")
         ax.set_xlabel("Perimetro")
         ax.set_ylabel("Textura")
-        ax.set_zlabel("Density")
 
         buf = io.BytesIO()
         plt.savefig(buf, format="png")
@@ -184,19 +187,23 @@ class CombinedHistogramView(HistogramBaseView):
         perimeter_values_b = self.get_histogram_data("Perimetro")
         texture_values_b = self.get_histogram_data("Textura")
         plot_3d_histogram_b = self.generate_3d_histogram(
-            perimeter_values_b, texture_values_b, bins3d
+            perimeter_values_b, texture_values_b, "Benignos", bins3d
         )
 
         self.diagnosis_type = "M"
         perimeter_values_m = self.get_histogram_data("Perimetro")
         texture_values_m = self.get_histogram_data("Textura")
         plot_3d_histogram_m = self.generate_3d_histogram(
-            perimeter_values_m, texture_values_m, bins3d
+            perimeter_values_m,
+            texture_values_m,
+            "Malignos",
+            bins3d,
         )
 
         plot_3d_histogram_combined = self.generate_3d_histogram(
             perimeter_values_b + perimeter_values_m,
             texture_values_b + texture_values_m,
+            "Combinados",
             bins3d,
         )
 
