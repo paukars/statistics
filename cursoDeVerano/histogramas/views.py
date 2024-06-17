@@ -9,7 +9,7 @@ from django.shortcuts import render
 from django.views import View
 from matplotlib import cm
 from mpl_toolkits.mplot3d.axes3d import Axes3D
-from scipy.stats import norm
+from scipy.stats import multivariate_normal, norm
 
 from .models import ReporteMedico
 
@@ -75,7 +75,9 @@ class HistogramBaseView(View):
         image_base64 = base64.b64encode(buf.getvalue()).decode("utf-8")
         return image_base64
 
-    def generate_3d_histogram(self, perimeter_values, texture_values, bins=20, x_range=None, y_range=None):
+    def generate_3d_histogram(
+        self, perimeter_values, texture_values, bins=10, x_range=None, y_range=None
+    ):
         x = np.array(perimeter_values)
         y = np.array(texture_values)
 
@@ -88,18 +90,24 @@ class HistogramBaseView(View):
         fig = plt.figure()
         ax = fig.add_subplot(projection="3d")
 
-        hist, xedges, yedges = np.histogram2d(x, y, bins=bins, range=[x_range, y_range])
+        # hist, xedges, yedges = np.histogram2d(x, y, bins=bins, range=[x_range, y_range])
 
         # Create the 3D histogram
-        hist, xedges, yedges = np.histogram2d(x, y, bins=(20, 20))
-        xpos, ypos = np.meshgrid(xedges[:-1] + xedges[1:], yedges[:-1] + yedges[1:])
-        xpos = xpos.flatten() / 2
-        ypos = ypos.flatten() / 2
+        hist, xedges, yedges = np.histogram2d(
+            x, y, bins=(bins, bins), range=[x_range, y_range]
+        )
+        xpos, ypos = np.meshgrid(
+            xedges[:-1] + (xedges[1] - xedges[0]) / 2,
+            yedges[:-1] + (yedges[1] - yedges[0]) / 2,
+            indexing="ij",
+        )
+        xpos = xpos.ravel()
+        ypos = ypos.ravel()
         zpos = np.zeros_like(xpos)
 
-        dx = xedges[1] - xedges[0]
-        dy = yedges[1] - yedges[0]
-        dz = hist.flatten()
+        dx = (xedges[1] - xedges[0]) * np.ones_like(zpos)
+        dy = (yedges[1] - yedges[0]) * np.ones_like(zpos)
+        dz = hist.ravel()
 
         # Get desired colormap
         cmap = plt.get_cmap("jet")
@@ -112,9 +120,27 @@ class HistogramBaseView(View):
         # Plot the bars
         ax.bar3d(xpos, ypos, zpos, dx, dy, dz, color=rgba, zsort="average")
 
+        # Fit a bivariate normal distribution to the data
+        mu = [np.mean(x), np.mean(y)]
+        sigma = np.cov(x, y)
+        rv = multivariate_normal(mu, sigma)
+
+        # Create a grid for plotting the normal distribution
+        x_grid = np.linspace(x_range[0], x_range[1], 100)
+        y_grid = np.linspace(y_range[0], y_range[1], 100)
+        X, Y = np.meshgrid(x_grid, y_grid)
+        pos = np.dstack((X, Y))
+        Z = rv.pdf(pos)
+
+        # Plot the normal distribution surface
+
+        # Plot the normal distribution surface
+        ax.plot_surface(X, Y, Z, cmap="viridis", alpha=1)
+
         ax.set_title("3D Plot of Perimetro and Textura")
         ax.set_xlabel("Perimetro")
         ax.set_ylabel("Textura")
+        ax.set_zlabel("Density")
 
         buf = io.BytesIO()
         plt.savefig(buf, format="png")
@@ -126,7 +152,7 @@ class HistogramBaseView(View):
 
 
 class CombinedHistogramView(HistogramBaseView):
-    def get(self, request, bins=20):
+    def get(self, request, bins=20, bins3d=10):
         bins = int(bins)
 
         histograms = []
@@ -152,15 +178,42 @@ class CombinedHistogramView(HistogramBaseView):
             )
 
         # Generate 3D histogram for Perimetro and Textura
-        perimeter_values = self.get_histogram_data("Perimetro")
-        texture_values = self.get_histogram_data("Textura")
-        plot_3d_histogram = self.generate_3d_histogram(
-            perimeter_values, texture_values, bins
+
+        # Generate 3D histograms for Perimetro and Textura
+        self.diagnosis_type = "B"
+        perimeter_values_b = self.get_histogram_data("Perimetro")
+        texture_values_b = self.get_histogram_data("Textura")
+        plot_3d_histogram_b = self.generate_3d_histogram(
+            perimeter_values_b, texture_values_b, bins3d
         )
+
+        self.diagnosis_type = "M"
+        perimeter_values_m = self.get_histogram_data("Perimetro")
+        texture_values_m = self.get_histogram_data("Textura")
+        plot_3d_histogram_m = self.generate_3d_histogram(
+            perimeter_values_m, texture_values_m, bins3d
+        )
+
+        plot_3d_histogram_combined = self.generate_3d_histogram(
+            perimeter_values_b + perimeter_values_m,
+            texture_values_b + texture_values_m,
+            bins3d,
+        )
+
+        # Calculate the indices for the 3D histograms
+        histogram_length = len(histograms)
+        index_3d_b = histogram_length
+        index_3d_m = histogram_length + 1
+        index_3d_combined = histogram_length + 2
 
         context = {
             "histograms": histograms,
-            "plot_3d_histogram": plot_3d_histogram,
+            "plot_3d_histogram_b": plot_3d_histogram_b,
+            "plot_3d_histogram_m": plot_3d_histogram_m,
+            "plot_3d_histogram_combined": plot_3d_histogram_combined,
+            "index_3d_b": index_3d_b,
+            "index_3d_m": index_3d_m,
+            "index_3d_combined": index_3d_combined,
         }
 
         return render(request, "combined_histograms.html", context)

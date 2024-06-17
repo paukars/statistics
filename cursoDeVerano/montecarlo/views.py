@@ -24,3 +24,20 @@ def montecarlo_integral(request, num_samples):
     return JsonResponse(
         {"num_samples": num_samples, "integral_estimate": integral_estimate}
     )
+
+
+def montecarlo_exponencial(request, num_samples):
+    num_samples = int(num_samples)
+
+    def integrand(x):
+        return 25 * x**2 * np.cos(x**2) * np.exp(-25 * x)
+
+    samples = np.random.exponential(scale=1.0 / 25, size=num_samples)
+
+    evaluations = integrand(samples)
+
+    integral_estimate = np.mean(evaluations)
+
+    return JsonResponse(
+        {"num_samples": num_samples, "integral_estimate": integral_estimate}
+    )
