@@ -5,14 +5,17 @@ Combined Histograms
 {% endblock %}
 
 {% block content %}
-<div class="container mt-5 carousel-container"  data-bs-theme="dark">
+<div class="container mt-5 carousel-container" data-bs-theme="dark">
   <div id="histogramCarousel" class="carousel slide" data-bs-ride="false">
     <div class="carousel-indicators">
       {% for histogram in histograms %}
       <button type="button" data-bs-target="#histogramCarousel" data-bs-slide-to="{{ forloop.counter0 }}" class="{% if forloop.first %}active{% endif %}" aria-current="true" aria-label="Slide {{ forloop.counter }}"></button>
       {% endfor %}
-      {% for combined_histogram in combined_histograms %}
-      <button type="button" data-bs-target="#histogramCarousel" data-bs-slide-to="{{ histograms|length|add:forloop.counter0 }}" aria-label="Combined Histogram {{ combined_histogram.attribute }}"></button>
+      {% for i in combined_histogram_indices %}
+      <button type="button" data-bs-target="#histogramCarousel" data-bs-slide-to="{{ i }}" aria-label="Combined Histogram {{ combined_histograms.forloop.counter0.attribute }}"></button>
+      {% endfor %}
+      {% for i in gmm_plot_indices %}
+      <button type="button" data-bs-target="#histogramCarousel" data-bs-slide-to="{{ i }}" aria-label="GMM Plot {{ gmm_plots.forloop.counter0.attribute }}"></button>
       {% endfor %}
       <button type="button" data-bs-target="#histogramCarousel" data-bs-slide-to="{{ index_3d_b }}" aria-label="3D Histogram Benign"></button>
       <button type="button" data-bs-target="#histogramCarousel" data-bs-slide-to="{{ index_3d_m }}" aria-label="3D Histogram Malignant"></button>
@@ -27,6 +30,11 @@ Combined Histograms
       {% for combined_histogram in combined_histograms %}
       <div class="carousel-item">
         <img src="data:image/png;base64,{{ combined_histogram.image }}" class="d-block w-100 custom-img-size" alt="Combined Histogram of {{ combined_histogram.attribute }}">
+      </div>
+      {% endfor %}
+      {% for gmm_plot in gmm_plots %}
+      <div class="carousel-item">
+        <img src="data:image/png;base64,{{ gmm_plot.image }}" class="d-block w-100 custom-img-size" alt="GMM Plot of {{ gmm_plot.attribute }}">
       </div>
       {% endfor %}
       <div class="carousel-item">
@@ -50,6 +58,8 @@ Combined Histograms
   </div>
 </div>
 {% endblock %}
+
+
 
 
 

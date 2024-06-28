@@ -10,6 +10,7 @@ from django.views import View
 from matplotlib import cm
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 from scipy.stats import multivariate_normal, norm
+from sklearn.mixture import GaussianMixture
 
 from .models import ReporteMedico
 
@@ -79,6 +80,8 @@ class HistogramBaseView(View):
         self, data1, data2, label1, label2, title, color1, color2, bins
     ):
         plt.figure(figsize=(12, 10))
+
+        # Plot histograms
         plt.hist(
             data1,
             bins=bins,
@@ -100,17 +103,100 @@ class HistogramBaseView(View):
 
         # Plot normal distribution curves
         mu1, std1 = np.mean(data1), np.std(data1)
-        x = np.linspace(plt.xlim()[0], plt.xlim()[1], 100)
-        p1 = norm.pdf(x, mu1, std1)
-        plt.plot(x, p1, color=color1, linewidth=1.5)
-
         mu2, std2 = np.mean(data2), np.std(data2)
+        median1, median2 = np.median(data1), np.median(data2)
+        cov1, cov2 = np.var(data1), np.var(
+            data2
+        )  # Using variance instead of covariance matrix for 1D data
+        x = np.linspace(plt.xlim()[0], plt.xlim()[1], 100)
+
+        p1 = norm.pdf(x, mu1, std1)
         p2 = norm.pdf(x, mu2, std2)
+
+        plt.plot(x, p1, color=color1, linewidth=1.5)
         plt.plot(x, p2, color=color2, linewidth=1.5)
+
+        # Add text annotations for variance and median
+        textstr1 = "\n".join(
+            (f"{label1}", f"$\\mu={mu1:.2f}$", f"$\\sigma={std1:.2f}$")
+        )
+        plt.gcf().text(
+            0.15, 0.8, textstr1, fontsize=12, bbox=dict(facecolor="white", alpha=0.5)
+        )
+
+        textstr2 = "\n".join(
+            (f"{label2}", f"$\\mu={mu2:.2f}$", f"$\\sigma={std2:.2f}$")
+        )
+        plt.gcf().text(
+            0.15, 0.7, textstr2, fontsize=12, bbox=dict(facecolor="white", alpha=0.5)
+        )
 
         plt.title(title)
         plt.xlabel("Value")
         plt.ylabel("Density")
+        plt.legend(loc="upper right")
+        plt.grid(True)
+
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png")
+        plt.close()
+        buf.seek(0)
+        return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+    def generate_gmm_plot(self, data1, data2, title, color1, color2, bins):
+        combined_data = np.concatenate([data1, data2])
+        combined_data = combined_data.reshape(-1, 1)
+
+        """gmm = GaussianMixture(
+            n_components=2, n_init=2000, init_params="random_from_data"
+        )"""
+        gmm = GaussianMixture(n_components=2)
+        gmm.fit(combined_data)
+        means = gmm.means_.flatten()
+        covariances = gmm.covariances_.flatten()
+        weights = gmm.weights_
+
+        x = np.linspace(min(combined_data), max(combined_data), 1000).reshape(-1, 1)
+        pdfs = [
+            w * norm.pdf(x, m, np.sqrt(c))
+            for w, m, c in zip(weights, means, covariances)
+        ]
+        pdf = np.sum(pdfs, axis=0)
+
+        plt.figure(figsize=(12, 10))
+        plt.hist(
+            combined_data,
+            bins=bins,
+            density=True,
+            color="grey",
+            edgecolor="black",
+            alpha=0.5,
+            label="Datos completos",
+        )
+        plt.plot(x, pdf, "k-", label="GMM")
+
+        for i, (mean, cov, w) in enumerate(zip(means, covariances, weights)):
+            std_dev = np.sqrt(cov)
+            plt.plot(x, w * norm.pdf(x, mean, std_dev), label=f"Componente {i+1}")
+            textstr = "\n".join(
+                (
+                    f"Componente {i+1}",
+                    f"$\mu={mean:.2f}$",
+                    f"$\sigma={std_dev:.2f}$",
+                    f"$\pi={w:.2f}$",
+                )
+            )
+            plt.gcf().text(
+                0.75,
+                0.5 - i * 0.1,
+                textstr,
+                fontsize=12,
+                bbox=dict(facecolor="white", alpha=0.5),
+            )
+
+        plt.title(title)
+        plt.xlabel("Valores")
+        plt.ylabel("Densidad")
         plt.legend(loc="upper right")
         plt.grid(True)
 
@@ -206,6 +292,7 @@ class CombinedHistogramView(HistogramBaseView):
 
         histograms = []
         combined_histograms = []
+        gmm_plots = []
 
         # Existing attributes
         attributes = [
@@ -265,6 +352,20 @@ class CombinedHistogramView(HistogramBaseView):
                         "image": combined_image,
                     }
                 )
+                gmm_image = self.generate_gmm_plot(
+                    data_m,
+                    data_b,
+                    f"GMM de {attribute} para Diagnósticos Malignos y Benignos",
+                    color_m,
+                    color_b,
+                    bins,
+                )
+                gmm_plots.append(
+                    {
+                        "attribute": attribute,
+                        "image": gmm_image,
+                    }
+                )
 
         # Generate 3D histograms for Perimetro and Textura
         self.diagnosis_type = "B"
@@ -302,22 +403,37 @@ class CombinedHistogramView(HistogramBaseView):
                 bins3d,
             )
 
-        # Calculate the indices for the 3D histograms
+        # Calculate the indices for the histograms
         histogram_length = len(histograms)
         combined_histogram_length = len(combined_histograms)
-        index_3d_b = histogram_length + combined_histogram_length
-        index_3d_m = histogram_length + combined_histogram_length + 1
-        index_3d_combined = histogram_length + combined_histogram_length + 2
+        gmm_plots_length = len(gmm_plots)
+        index_3d_b = histogram_length + combined_histogram_length + gmm_plots_length
+        index_3d_m = histogram_length + combined_histogram_length + gmm_plots_length + 1
+        index_3d_combined = (
+            histogram_length + combined_histogram_length + gmm_plots_length + 2
+        )
+
+        # Precompute indices for each plot type
+        combined_histogram_indices = [
+            histogram_length + i for i in range(combined_histogram_length)
+        ]
+        gmm_plot_indices = [
+            histogram_length + combined_histogram_length + i
+            for i in range(gmm_plots_length)
+        ]
 
         context = {
             "histograms": histograms,
             "combined_histograms": combined_histograms,
+            "gmm_plots": gmm_plots,
             "plot_3d_histogram_b": plot_3d_histogram_b,
             "plot_3d_histogram_m": plot_3d_histogram_m,
             "plot_3d_histogram_combined": plot_3d_histogram_combined,
             "index_3d_b": index_3d_b,
             "index_3d_m": index_3d_m,
             "index_3d_combined": index_3d_combined,
+            "combined_histogram_indices": combined_histogram_indices,
+            "gmm_plot_indices": gmm_plot_indices,
         }
 
         return render(request, "combined_histograms.html", context)
