@@ -6,7 +6,9 @@ from .models import ReporteMedico
 
 
 class ReporteMedicoAdmin(admin.ModelAdmin):
-    list_display = ("Id", "Diagnosis", "Textura", "Perimetro")
+    list_display = ("Id", "Diagnosis", "Textura", "Perimetro", "Radio")
     list_filter = ("Diagnosis",)
     search_fields = ("Id", "Diagnosis")
+
+
 admin.site.register(ReporteMedico, ReporteMedicoAdmin)

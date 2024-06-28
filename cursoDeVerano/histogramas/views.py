@@ -75,6 +75,51 @@ class HistogramBaseView(View):
         image_base64 = base64.b64encode(buf.getvalue()).decode("utf-8")
         return image_base64
 
+    def generate_combined_histogram(
+        self, data1, data2, label1, label2, title, color1, color2, bins
+    ):
+        plt.figure(figsize=(12, 10))
+        plt.hist(
+            data1,
+            bins=bins,
+            density=True,
+            color=color1,
+            edgecolor="black",
+            alpha=0.5,
+            label=label1,
+        )
+        plt.hist(
+            data2,
+            bins=bins,
+            density=True,
+            color=color2,
+            edgecolor="black",
+            alpha=0.5,
+            label=label2,
+        )
+
+        # Plot normal distribution curves
+        mu1, std1 = np.mean(data1), np.std(data1)
+        x = np.linspace(plt.xlim()[0], plt.xlim()[1], 100)
+        p1 = norm.pdf(x, mu1, std1)
+        plt.plot(x, p1, color=color1, linewidth=1.5)
+
+        mu2, std2 = np.mean(data2), np.std(data2)
+        p2 = norm.pdf(x, mu2, std2)
+        plt.plot(x, p2, color=color2, linewidth=1.5)
+
+        plt.title(title)
+        plt.xlabel("Value")
+        plt.ylabel("Density")
+        plt.legend(loc="upper right")
+        plt.grid(True)
+
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png")
+        plt.close()
+        buf.seek(0)
+        return base64.b64encode(buf.getvalue()).decode("utf-8")
+
     def generate_3d_histogram(
         self,
         perimeter_values,
@@ -155,66 +200,118 @@ class HistogramBaseView(View):
 
 
 class CombinedHistogramView(HistogramBaseView):
+
     def get(self, request, bins=20, bins3d=10):
         bins = int(bins)
 
         histograms = []
+        combined_histograms = []
 
+        # Existing attributes
         attributes = [
             ("Perimetro", "M", "red"),
             ("Perimetro", "B", "green"),
             ("Textura", "M", "blue"),
             ("Textura", "B", "orange"),
+            ("Radio", "M", "purple"),
+            ("Radio", "B", "yellow"),
         ]
+
+        # Generate histograms for existing attributes
         for attribute, diagnosis, color in attributes:
             self.attribute = attribute
             self.diagnosis_type = diagnosis
             self.color = color
             data = self.get_histogram_data(attribute)
-            image = self.generate_histogram(data, diagnosis, attribute, bins)
-            histograms.append(
-                {
-                    "attribute": attribute,
-                    "diagnosis": diagnosis,
-                    "image": image,
-                }
-            )
+            if data:  # Ensure data is not empty
+                image = self.generate_histogram(data, diagnosis, attribute, bins)
+                histograms.append(
+                    {
+                        "attribute": attribute,
+                        "diagnosis": diagnosis,
+                        "image": image,
+                    }
+                )
 
-        # Generate 3D histogram for Perimetro and Textura
+        # Generate combined histograms for each attribute
+        combined_attributes = [
+            ("Perimetro", "red", "green"),
+            ("Textura", "blue", "orange"),
+            ("Radio", "purple", "yellow"),
+        ]
+        for attribute, color_m, color_b in combined_attributes:
+            self.attribute = attribute
+
+            # Get data for both diagnoses
+            self.diagnosis_type = "M"
+            data_m = self.get_histogram_data(attribute)
+            self.diagnosis_type = "B"
+            data_b = self.get_histogram_data(attribute)
+
+            if data_m and data_b:  # Ensure data is not empty
+                combined_image = self.generate_combined_histogram(
+                    data_m,
+                    data_b,
+                    "Malignos",
+                    "Benignos",
+                    f"Histograma de {attribute} para Diagnósticos Malignos y Benignos",
+                    color_m,
+                    color_b,
+                    bins,
+                )
+                combined_histograms.append(
+                    {
+                        "attribute": attribute,
+                        "image": combined_image,
+                    }
+                )
 
         # Generate 3D histograms for Perimetro and Textura
         self.diagnosis_type = "B"
         perimeter_values_b = self.get_histogram_data("Perimetro")
         texture_values_b = self.get_histogram_data("Textura")
-        plot_3d_histogram_b = self.generate_3d_histogram(
-            perimeter_values_b, texture_values_b, "Benignos", bins3d
-        )
+        plot_3d_histogram_b = None
+        if perimeter_values_b and texture_values_b:  # Ensure data is not empty
+            plot_3d_histogram_b = self.generate_3d_histogram(
+                perimeter_values_b, texture_values_b, "Benignos", bins3d
+            )
 
         self.diagnosis_type = "M"
         perimeter_values_m = self.get_histogram_data("Perimetro")
         texture_values_m = self.get_histogram_data("Textura")
-        plot_3d_histogram_m = self.generate_3d_histogram(
-            perimeter_values_m,
-            texture_values_m,
-            "Malignos",
-            bins3d,
-        )
+        plot_3d_histogram_m = None
+        if perimeter_values_m and texture_values_m:  # Ensure data is not empty
+            plot_3d_histogram_m = self.generate_3d_histogram(
+                perimeter_values_m,
+                texture_values_m,
+                "Malignos",
+                bins3d,
+            )
 
-        plot_3d_histogram_combined = self.generate_3d_histogram(
-            perimeter_values_b + perimeter_values_m,
-            texture_values_b + texture_values_m,
-            "Combinados",
-            bins3d,
-        )
+        plot_3d_histogram_combined = None
+        if (
+            perimeter_values_b
+            and perimeter_values_m
+            and texture_values_b
+            and texture_values_m
+        ):  # Ensure data is not empty
+            plot_3d_histogram_combined = self.generate_3d_histogram(
+                perimeter_values_b + perimeter_values_m,
+                texture_values_b + texture_values_m,
+                "Combinados",
+                bins3d,
+            )
 
         # Calculate the indices for the 3D histograms
         histogram_length = len(histograms)
-        index_3d_b = histogram_length
-        index_3d_m = histogram_length + 1
-        index_3d_combined = histogram_length + 2
+        combined_histogram_length = len(combined_histograms)
+        index_3d_b = histogram_length + combined_histogram_length
+        index_3d_m = histogram_length + combined_histogram_length + 1
+        index_3d_combined = histogram_length + combined_histogram_length + 2
 
         context = {
             "histograms": histograms,
+            "combined_histograms": combined_histograms,
             "plot_3d_histogram_b": plot_3d_histogram_b,
             "plot_3d_histogram_m": plot_3d_histogram_m,
             "plot_3d_histogram_combined": plot_3d_histogram_combined,
